@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: imguser
+      POSTGRES_PASSWORD: f69Ac9165787
+      POSTGRES_DB: imgdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    environment:
+      - DB_USER=imguser
+      - DB_PASSWORD=f69Ac9165787
+      - DB_NAME=imgdb
+      - DB_HOST=postgres
+
+volumes:
+  db_data:
