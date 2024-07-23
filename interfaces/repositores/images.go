@@ -1,7 +1,9 @@
 package repositories
 
 import (
+	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -25,4 +27,15 @@ func (i *images) GetPath(id string) (string, error) {
 	}
 
 	return path, nil
+}
+
+func (i *images) SaveMetadata(filePath string, err error, dimensions string, cameraModel string, location string) {
+	// Save metadata to the database
+	_, err = i.db.Exec(`
+        INSERT INTO images (path, dimensions, camera_model, location, format)
+        VALUES ($1, $2, $3, $4, $5)
+    `, filePath, dimensions, cameraModel, location, filepath.Ext(filePath))
+	if err != nil {
+		fmt.Printf("error saving metadata to database: %v\n", err)
+	}
 }

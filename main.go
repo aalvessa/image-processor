@@ -29,11 +29,12 @@ func main() {
 
 	linkRepo := repositories.NewLinks(db)
 	imageRepo := repositories.NewImages(db)
+	statisticsRepo := repositories.NewStatistics(db)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Post("/generate-upload-link", handlers.GenerateUploadLink(linkRepo))
-	r.Post("/upload", handlers.UploadImage(db))
+	r.Post("/upload", handlers.UploadImage(linkRepo, imageRepo, statisticsRepo))
 	r.Get("/image/{id}", handlers.GetImage(imageRepo))
 	r.Get("/statistics", handlers.GetStatistics(db))
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("Hola")) })

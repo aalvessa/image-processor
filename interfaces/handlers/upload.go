@@ -1,20 +1,30 @@
 package handlers
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
 )
 
-func UploadImage(db *sqlx.DB) http.HandlerFunc {
+type LinksRepository interface {
+	MarkAsUsed(token string) error
+	ValidateToken(token string) error
+}
+
+type ImageRepository interface {
+	SaveMetadata(filePath string, err error, dimensions string, cameraModel string, location string)
+}
+
+type StatisticsRepository interface {
+	UpdateUploadStatistics()
+}
+
+func UploadImage(linksRepo LinksRepository, imageRepo ImageRepository, statisticsRepo StatisticsRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := r.ParseMultipartForm(10 << 20) // Limit upload size to 10MB
 		if err != nil {
@@ -28,20 +38,8 @@ func UploadImage(db *sqlx.DB) http.HandlerFunc {
 			return
 		}
 
-		// Validate the token and check expiration
-		var expiration time.Time
-		err = db.Get(&expiration, "SELECT expiration FROM upload_links WHERE token = $1 AND used = FALSE", token)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-				return
-			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if time.Now().After(expiration) {
-			http.Error(w, "Token has expired", http.StatusUnauthorized)
+		if err = linksRepo.ValidateToken(token); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
@@ -80,16 +78,15 @@ func UploadImage(db *sqlx.DB) http.HandlerFunc {
 				}
 
 				// Extract and save image metadata
-				go extractAndSaveMetadata(db, filePath)
+				go extractAndSaveMetadata(imageRepo, filePath)
 
 				// Update upload statistics
-				go updateUploadStatistics(db)
+				go statisticsRepo.UpdateUploadStatistics()
 			}
 		}
 
 		// Mark token as used after successful upload
-		_, err = db.Exec("UPDATE upload_links SET used = TRUE WHERE token = $1", token)
-		if err != nil {
+		if err = linksRepo.MarkAsUsed(token); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -99,7 +96,7 @@ func UploadImage(db *sqlx.DB) http.HandlerFunc {
 	}
 }
 
-func extractAndSaveMetadata(db *sqlx.DB, filePath string) {
+func extractAndSaveMetadata(imageRepo ImageRepository, filePath string) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		fmt.Printf("error opening file: %v\n", err)
@@ -124,25 +121,5 @@ func extractAndSaveMetadata(db *sqlx.DB, filePath string) {
 		location = "" // extract location
 	}
 
-	// Save metadata to the database
-	_, err = db.Exec(`
-        INSERT INTO images (path, dimensions, camera_model, location, format)
-        VALUES ($1, $2, $3, $4, $5)
-    `, filePath, dimensions, cameraModel, location, filepath.Ext(filePath))
-	if err != nil {
-		fmt.Printf("error saving metadata to database: %v\n", err)
-	}
-}
-
-func updateUploadStatistics(db *sqlx.DB) {
-	currentDate := time.Now().Format("2006-01-02")
-	_, err := db.Exec(`
-        INSERT INTO upload_statistics (upload_date, upload_count)
-        VALUES ($1, 1)
-        ON CONFLICT (upload_date)
-        DO UPDATE SET upload_count = upload_statistics.upload_count + 1
-    `, currentDate)
-	if err != nil {
-		fmt.Printf("error updating upload statistics: %v\n", err)
-	}
+	imageRepo.SaveMetadata(filePath, err, dimensions, cameraModel, location)
 }
