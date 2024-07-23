@@ -9,7 +9,7 @@ import (
 )
 
 type Statistics struct {
-	MostPopularFormat     string         `json:"most_popular_format"`
+	MostPopularFormat     *string        `json:"most_popular_format"`
 	TopCameraModels       []string       `json:"top_camera_models"`
 	UploadFrequencyPerDay map[string]int `json:"upload_frequency_per_day"`
 }

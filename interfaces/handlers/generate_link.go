@@ -6,8 +6,11 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/jmoiron/sqlx"
 )
+
+type LinkCreator interface {
+	CreateLink(token string, expiration time.Time) error
+}
 
 type GenerateLinkRequest struct {
 	SecretToken string `json:"secret_token"`
@@ -18,9 +21,9 @@ type GenerateLinkResponse struct {
 	UploadLink string `json:"upload_link"`
 }
 
-var jwtKey = []byte("your_secret_key")
+var jwtKey = []byte("07t2me784edA44fe6a7Ffabf0D534247")
 
-func GenerateUploadLink(db *sqlx.DB) http.HandlerFunc {
+func GenerateUploadLink(creator LinkCreator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req GenerateLinkRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -35,12 +38,14 @@ func GenerateUploadLink(db *sqlx.DB) http.HandlerFunc {
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		tokenString, err := token.SignedString(jwtKey)
+
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		_, err = db.Exec("INSERT INTO upload_links (token, expiration) VALUES ($1, $2)", tokenString, expirationTime)
+		err = creator.CreateLink(tokenString, expirationTime)
+
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

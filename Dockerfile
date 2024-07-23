@@ -18,6 +18,7 @@ WORKDIR /root/
 # Copy the built binary from the builder stage
 COPY --from=builder /app/main .
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/uploads ./uploads
 
 # Expose the port on which the application will run
 EXPOSE 8000
