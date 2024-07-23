@@ -1,5 +1,4 @@
 CREATE TABLE upload_statistics (
-    id SERIAL PRIMARY KEY,
-    upload_date DATE,
+    upload_date DATE PRIMARY KEY,
     upload_count INT
 );
