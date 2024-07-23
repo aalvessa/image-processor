@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 
 	"image/jpeg"
 	"os"
@@ -77,10 +79,20 @@ func UploadImage(db *sqlx.DB) http.HandlerFunc {
 				return
 			}
 
-			exifData, _ := exif.Decode(src)
+			var cameraModel string
+			var lat, lng float64
 
-			cameraModel, _ := exifData.Get(exif.Model)
-			//lat, lng, _ := exifData.LatLong()
+			exifData, err := exif.Decode(src)
+
+			if err != nil {
+				fmt.Println("Error decoding exifData: %w", err)
+				cameraModel = ""
+				lat, lng = 0, 0
+			} else {
+				model, _ := exifData.Get(exif.Model)
+				cameraModel, _ = model.StringVal()
+				lat, lng, _ = exifData.LatLong()
+			}
 
 			newPath := "uploads/resized_" + filepath.Base(file.Filename)
 			newFile, err := os.Create(newPath)
@@ -95,7 +107,7 @@ func UploadImage(db *sqlx.DB) http.HandlerFunc {
 
 			var imageID int
 			err = db.QueryRow("INSERT INTO images (path, dimensions, camera_model, location) VALUES ($1, $2, $3, $4) RETURNING id",
-				newPath, "800x600", cameraModel, "latLng").Scan(&imageID)
+				newPath, "800x600", cameraModel, strconv.FormatFloat(lat, 'f', -1, 64)+"-"+strconv.FormatFloat(lng, 'f', -1, 64)).Scan(&imageID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
