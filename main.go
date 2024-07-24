@@ -38,7 +38,7 @@ func startRouter(db *sqlx.DB) {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Post("/generate-upload-link", handlers.GenerateUploadLink(linkRepo))
+	r.Post("/upload-link", handlers.GenerateUploadLink(linkRepo))
 	r.Post("/upload", handlers.UploadImage(linkRepo, imageRepo, statisticsRepo))
 	r.Get("/image/{id}", handlers.GetImage(imageRepo))
 	r.Get("/statistics", handlers.GetStatistics(statisticsRepo))
