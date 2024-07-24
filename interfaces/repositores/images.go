@@ -29,13 +29,21 @@ func (i *images) GetPath(id string) (string, error) {
 	return path, nil
 }
 
-func (i *images) SaveMetadata(filePath string, err error, dimensions string, cameraModel string, location string) {
+func (i *images) SaveMetadata(
+	filePath string,
+	dimensions string,
+	cameraModel string,
+	location string,
+) (int64, error) {
 	// Save metadata to the database
-	_, err = i.db.Exec(`
+	var imageID int64
+	err := i.db.QueryRow(`
         INSERT INTO images (path, dimensions, camera_model, location, format)
-        VALUES ($1, $2, $3, $4, $5)
-    `, filePath, dimensions, cameraModel, location, filepath.Ext(filePath))
+        VALUES ($1, $2, $3, $4, $5) RETURNING id
+    `, filePath, dimensions, cameraModel, location, filepath.Ext(filePath)).Scan(&imageID)
 	if err != nil {
-		fmt.Printf("error saving metadata to database: %v\n", err)
+		return 0, fmt.Errorf("error saving metadata to database: %v", err)
 	}
+
+	return imageID, nil
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,11 +18,15 @@ type LinksRepository interface {
 }
 
 type ImageRepository interface {
-	SaveMetadata(filePath string, err error, dimensions string, cameraModel string, location string)
+	SaveMetadata(filePath string, dimensions string, cameraModel string, location string) (int64, error)
 }
 
 type StatisticsRepository interface {
 	UpdateUploadStatistics()
+}
+
+type UploadResponse struct {
+	ImageIDs []int64 `json:"image_ids"`
 }
 
 func UploadImage(linksRepo LinksRepository, imageRepo ImageRepository, statisticsRepo StatisticsRepository) http.HandlerFunc {
@@ -53,6 +58,7 @@ func UploadImage(linksRepo LinksRepository, imageRepo ImageRepository, statistic
 			}
 		}
 
+		var imageIDs []int64
 		// Process each uploaded file
 		for _, headers := range r.MultipartForm.File {
 			for _, header := range headers {
@@ -78,7 +84,12 @@ func UploadImage(linksRepo LinksRepository, imageRepo ImageRepository, statistic
 				}
 
 				// Extract and save image metadata
-				go extractAndSaveMetadata(imageRepo, filePath)
+				imageID, err := extractAndSaveMetadata(imageRepo, filePath)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				imageIDs = append(imageIDs, imageID)
 
 				// Update upload statistics
 				go statisticsRepo.UpdateUploadStatistics()
@@ -91,16 +102,16 @@ func UploadImage(linksRepo LinksRepository, imageRepo ImageRepository, statistic
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Files uploaded successfully"))
+		response := UploadResponse{ImageIDs: imageIDs}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
 	}
 }
 
-func extractAndSaveMetadata(imageRepo ImageRepository, filePath string) {
+func extractAndSaveMetadata(imageRepo ImageRepository, filePath string) (int64, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
-		fmt.Printf("error opening file: %v\n", err)
-		return
+		return 0, fmt.Errorf("error opening file: %v", err)
 	}
 	defer f.Close()
 
@@ -121,5 +132,5 @@ func extractAndSaveMetadata(imageRepo ImageRepository, filePath string) {
 		location = "" // extract location
 	}
 
-	imageRepo.SaveMetadata(filePath, err, dimensions, cameraModel, location)
+	return imageRepo.SaveMetadata(filePath, dimensions, cameraModel, location)
 }
